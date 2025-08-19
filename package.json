@@ -1,0 +1,13 @@
+{
+	"name": "molecu-library",
+	"version": "1.0.0",
+	"description": "Proyecto de una librería con front en Nuxt y Back en Molecular",
+	"keywords": [],
+	"license": "ISC",
+	"author": "abbytec",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"packageManager": "pnpm@10.11.0"
+}
