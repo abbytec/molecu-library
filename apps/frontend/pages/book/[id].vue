@@ -25,8 +25,8 @@
 					</div>
 
 					<div class="book-detail-page__info">
-						<h1 class="book-detail-page__title">{{ bookData.title }}</h1>
-						<p class="book-detail-page__author">por {{ bookData.author }}</p>
+						<h1 class="book-detail-page__title">{{ bookData?.title || "Título desconocido" }}</h1>
+						<p class="book-detail-page__author">por {{ bookData?.author || "Autor desconocido" }}</p>
 						<p v-if="bookData.year" class="book-detail-page__year">Año de publicación: {{ bookData.year }}</p>
 					</div>
 				</div>
@@ -231,14 +231,19 @@ const onImageError = (event) => {
 definePageMeta({
 	layout: "default",
 });
-useHead({
-	title: `${bookData.value.title} - Molecu Library`,
-	meta: [
-		{
-			name: "author",
-			content: bookData.value.author,
-		},
-	],
+useHead(() => {
+	const title = bookData.value?.title || "Detalle de libro";
+	const author = bookData.value?.author || "Desconocido";
+
+	return {
+		title: `${title} - Molecu Library`,
+		meta: [
+			{
+				name: "author",
+				content: author,
+			},
+		],
+	};
 });
 </script>
 
