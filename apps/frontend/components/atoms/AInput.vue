@@ -26,7 +26,7 @@ const emit = defineEmits<(e: "update:modelValue", v: string) => void>();
 	border-radius: 5px;
 	font-size: 1rem;
 	background: $surface-alt;
-	height: 2rem;
+	height: 3rem;
 	padding: 8px;
 	&:focus {
 		outline: 2px solid $divider;

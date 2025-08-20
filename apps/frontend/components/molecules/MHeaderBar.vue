@@ -2,12 +2,12 @@
 	<header class="app-header">
 		<AContainer>
 			<div class="app-header__inner">
-				<div class="u-flex u-items-center u-gap-3">
+				<div>
 					<slot name="brand">
-						<NuxtLink to="/" aria-label="Ir al inicio" class="link-btn">📚 Book Reviews</NuxtLink>
+						<NuxtLink to="/home" aria-label="Ir al inicio" class="link-btn">📚 Book Reviews</NuxtLink>
 					</slot>
 				</div>
-				<div class="u-flex u-items-center u-gap-3">
+				<div>
 					<!-- Botón fijo: Mi biblioteca -->
 					<ALink to="/library">Mi biblioteca</ALink>
 				</div>

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import MLoginFrom from "~/components/molecules/MLoginFrom.vue";
+definePageMeta({
+	layout: "auth",
+});
 </script>
 
 <template>
