@@ -20,7 +20,7 @@
 		"typescript": "^5.9.2"
 	},
 	"dependencies": {
-		"@molecu-library/shared": "file:../../packages/shared",
+		"shared": "file:../../packages/shared",
 		"axios": "^1.11.0",
 		"dotenv": "^17.2.1",
 		"moleculer": "^0.14.35",

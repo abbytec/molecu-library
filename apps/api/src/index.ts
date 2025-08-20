@@ -1,12 +1,12 @@
 import "dotenv/config";
 import { ServiceBroker } from "moleculer";
-import config from "./moleculer.config";
+import config from "./moleculer.config.js";
 
 // importa tus servicios
-import ApiService from "./services/api.service";
-import OpenLibraryService from "./services/openLibrary.service";
-import LibraryService from "./services/library.service";
-import SearchService from "./services/search.service";
+import ApiService from "./services/api.service.js";
+import OpenLibraryService from "./services/openLibrary.service.js";
+import LibraryService from "./services/library.service.js";
+import SearchService from "./services/search.service.js";
 
 async function main() {
 	const broker = new ServiceBroker(config);

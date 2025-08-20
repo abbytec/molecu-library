@@ -1,6 +1,6 @@
 import type { ServiceSchema } from "moleculer";
-import { connectMongo } from "../db";
-import { Search } from "../models/Search";
+import { connectMongo } from "../db.js";
+import { Search } from "../models/Search.js";
 
 const SearchService: ServiceSchema = {
 	name: "search",

@@ -1,5 +1,5 @@
 import { Schema, model, Document } from "mongoose";
-import { Book as SharedBook, BOOK_CONSTRAINTS } from "@molecu-library/shared";
+import { Book as SharedBook, BOOK_CONSTRAINTS } from "shared";
 
 export interface BookDoc extends Document, SharedBook {
 	createdAt: Date;

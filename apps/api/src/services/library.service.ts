@@ -1,7 +1,7 @@
 import type { ServiceSchema } from "moleculer";
-import { connectMongo } from "../db";
-import { Book } from "../models/Book";
-import { fetchAsBase64 } from "../utils/images";
+import { connectMongo } from "../db.js";
+import { Book } from "../models/Book.js";
+import { fetchAsBase64 } from "../utils/images.js";
 
 const LibraryService: ServiceSchema = {
 	name: "library",

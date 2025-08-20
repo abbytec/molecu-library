@@ -1,6 +1,6 @@
 import { useNotificationStore } from "./useNotificationStore";
-import type { BookInput } from "@molecu-library/shared";
-import { validateBook } from "@molecu-library/shared";
+import type { BookInput } from "shared";
+import { validateBook } from "shared";
 
 export const useBookStore = defineStore("book", {
 	state: () => ({

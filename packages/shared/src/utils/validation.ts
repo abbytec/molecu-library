@@ -2,8 +2,8 @@
  * Utilidades de validación compartidas
  */
 
-import { BOOK_CONSTRAINTS } from "../types/book";
-import { SEARCH_CONSTRAINTS } from "../types/search";
+import { BOOK_CONSTRAINTS } from "../types/book.js";
+import { SEARCH_CONSTRAINTS } from "../types/search.js";
 
 // Validador genérico
 export interface ValidationResult {

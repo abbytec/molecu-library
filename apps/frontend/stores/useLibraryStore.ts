@@ -1,6 +1,6 @@
 import { useNotificationStore } from "./useNotificationStore";
-import type { BookWithId as LibraryBook, LibraryFilters, LibraryApiResponse } from "@molecu-library/shared";
-import { DEFAULT_LIBRARY_FILTERS, validateBook } from "@molecu-library/shared";
+import type { BookWithId as LibraryBook, LibraryFilters, LibraryApiResponse } from "shared";
+import { DEFAULT_LIBRARY_FILTERS, validateBook } from "shared";
 
 interface LibraryState {
 	books: LibraryBook[];

@@ -1,9 +1,9 @@
 import type { ServiceSchema } from "moleculer";
 import ApiGateway from "moleculer-web";
-import { signSession, verifySession } from "../utils/session";
-import { parseCookies, buildCookie } from "../utils/cookies";
-import { sendJSON, sendText } from "../utils/http";
-import { BookDoc } from "../models/Book";
+import { signSession, verifySession } from "../utils/session.js";
+import { parseCookies, buildCookie } from "../utils/cookies.js";
+import { sendJSON, sendText } from "../utils/http.js";
+import { BookDoc } from "../models/Book.js";
 
 const FRONT_ORIGIN = process.env.FRONT_ORIGIN || "http://localhost:3000";
 const COOKIE_NAME = process.env.SESSION_COOKIE || "sess";

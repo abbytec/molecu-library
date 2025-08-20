@@ -1,4 +1,4 @@
-import { BookWithId } from "./book";
+import { BookWithId } from "./book.js";
 
 export interface ApiResponse<T = any> {
 	ok: boolean;

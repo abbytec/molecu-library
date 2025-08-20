@@ -14,10 +14,23 @@
 	"scripts": {
 		"dev:api": "npm run dev --workspace=api",
 		"dev:front": "npm run dev --workspace=frontend",
-		"build:shared": "npm run build --workspace=shared"
+		"dev": "concurrently \"npm run dev:api\" \"npm run dev:front\"",
+		"build:shared": "npm run build --workspace=shared",
+		"build:api": "npm run build --workspace=api",
+		"build:front": "npm run build --workspace=frontend",
+		"build": "npm run build:shared && npm run build:api && npm run build:front",
+		"build:prod": "npm run build",
+		"start:api": "npm run start --workspace=api",
+		"start:front": "npm run preview --workspace=frontend",
+		"start": "concurrently \"npm run start:api\" \"npm run start:front\"",
+		"clean": "npm run clean --workspace=shared && rm -rf apps/*/dist apps/*/node_modules/.cache",
+		"install:all": "npm install && npm run build:shared && npm install --workspace=api && npm install --workspace=frontend",
+		"deploy:setup": "npm run clean && npm run install:all && npm run build",
+		"deploy:start": "npm run start"
 	},
 	"devDependencies": {
 		"typescript": "^5.9.2",
-		"@types/node": "^24.3.0"
+		"@types/node": "^24.3.0",
+		"concurrently": "^8.2.2"
 	}
 }
