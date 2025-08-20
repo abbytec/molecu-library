@@ -115,10 +115,8 @@ const config = useRuntimeConfig();
 // Importar stores dinámicamente para evitar errores de TypeScript
 const { useBookStore } = await import("~/stores/useBookStore");
 const { useBookSearchStore } = await import("~/stores/useBookSearchStore");
-const { useNotificationStore } = await import("~/stores/useNotificationStore");
 const bookStore = useBookStore();
 const bookSearchStore = useBookSearchStore();
-const notificationStore = useNotificationStore();
 
 const formData = ref({
 	rating: 0,
@@ -232,6 +230,15 @@ const onImageError = (event) => {
 
 definePageMeta({
 	layout: "default",
+});
+useHead({
+	title: `${bookData.value.title} - Molecu Library`,
+	meta: [
+		{
+			name: "author",
+			content: bookData.value.author,
+		},
+	],
 });
 </script>
 

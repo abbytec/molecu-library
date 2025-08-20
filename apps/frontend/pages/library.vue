@@ -219,6 +219,19 @@ onUnmounted(() => {
 		searchTimeout = null;
 	}
 });
+useHead({
+	title: "Mi Biblioteca - Molecu Library",
+	meta: [
+		{
+			name: "description",
+			content: "Libros a los que has puntuado o hecho reseñas",
+		},
+		{
+			name: "keywords",
+			content: "buscar libros, biblioteca digital, catálogo libros, descubrir lecturas",
+		},
+	],
+});
 </script>
 
 <style scoped lang="scss">
