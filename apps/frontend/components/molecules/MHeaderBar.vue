@@ -7,9 +7,11 @@
 						<NuxtLink to="/home" aria-label="Ir al inicio" class="link-btn">📚 Book Reviews</NuxtLink>
 					</slot>
 				</div>
-				<div>
+				<div class="app-header__actions">
 					<!-- Botón fijo: Mi biblioteca -->
 					<ALink to="/library">Mi biblioteca</ALink>
+					<!-- Botón de logout - solo mostrar si el usuario está autenticado -->
+					<ALogoutButton v-if="authStore.ok" />
 				</div>
 			</div>
 		</AContainer>
@@ -18,6 +20,9 @@
 <script setup lang="ts">
 import AContainer from "@/components/atoms/AContainer.vue";
 import ALink from "@/components/atoms/ALink.vue";
+import ALogoutButton from "@/components/atoms/ALogoutButton.vue";
+
+const authStore = useAuthStore();
 </script>
 <style scoped lang="scss">
 .app-header {
@@ -29,5 +34,11 @@ import ALink from "@/components/atoms/ALink.vue";
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+}
+
+.app-header__actions {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
 }
 </style>

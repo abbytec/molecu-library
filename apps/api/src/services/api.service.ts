@@ -120,6 +120,29 @@ const ApiService: ServiceSchema = {
 						}
 					},
 
+					// POST /api/auth/logout
+					"POST auth/logout"(req: any, res: any, ctx: any) {
+						try {
+							// Limpiar la cookie de sesión estableciendo una cookie vacía que expire inmediatamente
+							const attrs = [
+								`${COOKIE_NAME}=`,
+								"Path=/",
+								"HttpOnly",
+								"SameSite=Lax",
+								"Max-Age=0",
+								"Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+							];
+							if (process.env.NODE_ENV === "production") attrs.push("Secure");
+
+							res.setHeader("Set-Cookie", attrs.join("; "));
+							ctx.broker.logger.info("User logged out successfully");
+							return sendJSON(res, 200, { ok: true, message: "Logged out successfully" });
+						} catch (err) {
+							ctx.broker.logger.error("Logout error:", err);
+							return sendJSON(res, 500, { ok: false, error: "Internal error" });
+						}
+					},
+
 					// ============ BOOK SEARCH ============
 					// GET /api/books/search?q=
 					"GET books/search": async function (req: any, res: any) {

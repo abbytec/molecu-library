@@ -83,6 +83,7 @@
 import MBookSearch from "~/components/molecules/MBookSearch.vue";
 import MRecentSearches from "~/components/molecules/MRecentSearches.vue";
 import ABookCard from "~/components/atoms/ABookCard.vue";
+import AButton from "../atoms/AButton.vue";
 import { useBookSearchStore, type SearchBook } from "~/stores/useBookSearchStore";
 import { useBookStore } from "~/stores/useBookStore";
 import { ref, onMounted, computed, nextTick } from "vue";
