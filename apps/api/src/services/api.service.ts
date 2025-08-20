@@ -5,7 +5,7 @@ import { parseCookies, buildCookie } from "../utils/cookies.js";
 import { sendJSON, sendText } from "../utils/http.js";
 import { BookDoc } from "../models/Book.js";
 
-const FRONT_ORIGIN = process.env.FRONT_ORIGIN || "http://localhost:3000";
+const FRONT_ORIGIN = process.env.FRONT_ORIGIN || "http://localhost:3001";
 const COOKIE_NAME = process.env.SESSION_COOKIE || "sess";
 const ONE_WEEK = 60 * 60 * 24 * 7;
 
@@ -49,7 +49,7 @@ const ApiService: ServiceSchema = {
 	name: "api",
 	mixins: [ApiGateway],
 	settings: {
-		port: Number(process.env.PORT || 8080),
+		port: Number(process.env.PORT || 8181),
 
 		dependencies: ["search", "openLibrary", "library"],
 
