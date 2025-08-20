@@ -30,3 +30,32 @@ a:hover {
     color: $link-hover;
     text-decoration: underline;
 }
+
+
+/* Utilidades */
+.u-container {
+    width: min(1100px, 100% - 2rem);
+    margin-inline: auto;
+}
+
+.u-flex {
+    display: flex;
+}
+
+.u-items-center {
+    align-items: center;
+}
+
+.u-justify-between {
+    justify-content: space-between;
+}
+
+@function gap-size($n) {
+    @return $n * 0.25rem; // escala base
+}
+
+@for $i from 1 through 6 {
+    .u-gap-#{$i} {
+        gap: gap-size($i);
+    }
+}
