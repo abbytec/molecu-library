@@ -81,6 +81,24 @@ const ApiService: ServiceSchema = {
 				autoAliases: false,
 
 				aliases: {
+					// ============ HEALTH ============
+					"GET health"(req: any, res: any, ctx: any) {
+						try {
+							const $ctx = req.$ctx;
+							const health = {
+								ok: true,
+								service: "api",
+								nodeID: $ctx?.broker?.nodeID,
+								uptimeSec: Math.floor(process.uptime()),
+								timestamp: new Date().toISOString(),
+							};
+
+							return sendJSON(res, 200, health);
+						} catch (e) {
+							ctx?.broker?.logger?.error?.(e);
+							return sendJSON(res, 500, { ok: false, error: "Internal error" });
+						}
+					},
 					// ============ AUTH ============
 					// POST /api/auth/login
 					"POST auth/login"(req: any, res: any, ctx: any) {
