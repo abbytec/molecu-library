@@ -3,6 +3,7 @@ import ApiGateway from "moleculer-web";
 import { signSession, verifySession } from "../utils/session";
 import { parseCookies, buildCookie } from "../utils/cookies";
 import { sendJSON, sendText } from "../utils/http";
+import { BookDoc } from "../models/Book";
 
 const FRONT_ORIGIN = process.env.FRONT_ORIGIN || "http://localhost:3000";
 const COOKIE_NAME = process.env.SESSION_COOKIE || "sess";
@@ -213,7 +214,9 @@ const ApiService: ServiceSchema = {
 								localId = await $ctx.broker.call("library.findByOlKey", { ol_key }, { meta: $ctx?.meta });
 								if (localId) {
 									// Si está en biblioteca, usar la portada local
-									bookData.coverUrl = `/api/books/library/front-cover/${localId}`;
+									const protocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
+									const host = req.headers.host;
+									bookData.coverUrl = `${protocol}://${host}a/api/books/library/front-cover/${localId}`;
 								}
 							} catch {
 								// No está en biblioteca, usar portada de OpenLibrary
@@ -235,7 +238,7 @@ const ApiService: ServiceSchema = {
 							if (!payload) return;
 
 							const { q, sort, withReview, page, limit } = req.$params;
-							const result = await $ctx.broker.call(
+							const result: { total: number; items: BookDoc[]; page: number; limit: number } = await $ctx.broker.call(
 								"library.list",
 								{
 									q,
@@ -246,6 +249,13 @@ const ApiService: ServiceSchema = {
 								},
 								{ meta: $ctx?.meta }
 							);
+							const protocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
+							const host = req.headers.host;
+							result.items = result.items.map((item: BookDoc) => ({
+								...item.toObject(),
+								coverUrl: item.coverBase64 ? `${protocol}://${host}/api/books/library/front-cover/${item._id}` : null,
+								coverBase64: undefined,
+							}));
 
 							return sendJSON(res, 200, result);
 						} catch (e) {
@@ -388,33 +398,41 @@ const ApiService: ServiceSchema = {
 					"GET books/library/front-cover/:id": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
+							// Si necesitás público para <img> en otro dominio, quitá esta línea.
 							const payload = requireSession(req, res, $ctx);
 							if (!payload) return;
 
-							const id = req.$params.id;
-							const coverBase64 = await $ctx.broker.call("library.cover", { id }, { meta: $ctx?.meta });
-
-							let base64Data: string;
-							let contentType = "image/jpeg";
-
-							if (coverBase64.startsWith("data:")) {
-								const [header, data] = coverBase64.split(",");
-								base64Data = data;
-								const mimeMatch = header.match(/data:([^;]+)/);
-								if (mimeMatch) {
-									contentType = mimeMatch[1];
-								}
-							} else {
-								base64Data = coverBase64;
+							const { id } = req.$params;
+							const raw = await $ctx.broker.call("library.cover", { id }, { meta: $ctx?.meta });
+							if (!raw) {
+								res.statusCode = 404;
+								res.setHeader("Content-Type", "text/plain");
+								return res.end("Cover not found");
 							}
 
-							const buffer = Buffer.from(base64Data, "base64");
-							res.setHeader("Content-Type", contentType);
-							res.setHeader("Content-Length", buffer.length);
-							res.setHeader("Cache-Control", "public, max-age=31536000"); // 1 year cache
+							// normaliza data URL o base64 directo
+							const { mime, buffer } = (() => {
+								if (typeof raw !== "string") throw new Error("Invalid cover payload");
+								if (raw.startsWith("data:")) {
+									// data:[mime][;charset=...][;base64],<data>
+									const m = raw.match(/^data:([^;,]+)(?:;charset=[^;,]+)?(?:;base64)?,(.*)$/s);
+									if (!m) throw new Error("Bad data URL");
+									const mime = m[1] || "application/octet-stream";
+									const data = m[2]; // ya viene en base64 cuando trae ;base64
+									return { mime, buffer: Buffer.from(data.replace(/\s/g, ""), "base64") };
+								}
+								// base64 “pelado”
+								return { mime: "image/jpeg", buffer: Buffer.from(raw.replace(/\s/g, ""), "base64") };
+							})();
+
+							res.writeHead(200, {
+								"Content-Type": mime,
+								"Cache-Control": "public, max-age=31536000, immutable",
+								"Content-Length": String(buffer.length),
+							});
 							return res.end(buffer);
-						} catch (e) {
-							if (e instanceof Error && e.message === "Cover not found") {
+						} catch (e: any) {
+							if (e?.message === "Cover not found") {
 								res.statusCode = 404;
 								res.setHeader("Content-Type", "text/plain");
 								return res.end("Cover not found");
