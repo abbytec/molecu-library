@@ -24,14 +24,11 @@ export const useNotificationStore = defineStore("notification", {
 				...notification,
 			};
 
-			console.log("➕ Agregando notificación:", newNotification);
 			this.notifications.push(newNotification);
-			console.log("📋 Estado después de agregar:", this.notifications.length, this.notifications);
 
 			// Auto-remover si tiene duración
 			if (newNotification.duration && newNotification.duration > 0) {
 				setTimeout(() => {
-					console.log("⏰ Auto-removiendo notificación:", id);
 					this.removeNotification(id);
 				}, newNotification.duration);
 			}

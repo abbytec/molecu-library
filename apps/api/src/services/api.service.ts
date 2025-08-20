@@ -216,7 +216,7 @@ const ApiService: ServiceSchema = {
 									// Si está en biblioteca, usar la portada local
 									const protocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
 									const host = req.headers.host;
-									bookData.coverUrl = `${protocol}://${host}a/api/books/library/front-cover/${localId}`;
+									bookData.coverUrl = `${protocol}://${host}/api/books/library/front-cover/${localId}`;
 								}
 							} catch {
 								// No está en biblioteca, usar portada de OpenLibrary

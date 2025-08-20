@@ -4,10 +4,12 @@
 			<div class="notification__content">
 				<div class="notification__icon">
 					<svg v-if="type === 'success'" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+						<path
+							d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
 					</svg>
 					<svg v-else-if="type === 'error'" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3L15 17l-3-3-3 3-1.3-1.3 3-3-3-3L9 7l3 3 3-3 1.3 1.3-3 3 3 3z" />
+						<path
+							d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm4.3 14.3L15 17l-3-3-3 3-1.3-1.3 3-3-3-3L9 7l3 3 3-3 1.3 1.3-3 3 3 3z" />
 					</svg>
 					<svg v-else-if="type === 'warning'" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 						<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
@@ -30,7 +32,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue"
+import { ref, onMounted, onUnmounted } from "vue";
 
 const props = defineProps({
 	message: {
@@ -50,37 +52,35 @@ const props = defineProps({
 		type: Boolean,
 		default: true,
 	},
-})
+});
 
-const emit = defineEmits(["dismiss"])
+const emit = defineEmits(["dismiss"]);
 
-const visible = ref(true)
-let timeoutId = null
+const visible = ref(true);
+let timeoutId = null;
 
 const handleDismiss = () => {
-	console.log('❌ ANotification handleDismiss llamado');
-	visible.value = false
+	visible.value = false;
 	if (timeoutId) {
-		clearTimeout(timeoutId)
+		clearTimeout(timeoutId);
 	}
-	emit("dismiss")
-}
+	emit("dismiss");
+};
 
 onMounted(() => {
-	console.log('🎯 ANotification montado:', props.message, props.type);
 	if (props.duration > 0) {
 		timeoutId = setTimeout(() => {
-			console.log('⏰ ANotification auto-dismiss después de', props.duration, 'ms');
-			handleDismiss()
-		}, props.duration)
+			console.log("⏰ ANotification auto-dismiss después de", props.duration, "ms");
+			handleDismiss();
+		}, props.duration);
 	}
-})
+});
 
 onUnmounted(() => {
 	if (timeoutId) {
-		clearTimeout(timeoutId)
+		clearTimeout(timeoutId);
 	}
-})
+});
 </script>
 
 <style scoped lang="scss">
@@ -198,4 +198,4 @@ onUnmounted(() => {
 		transform: translateY(-100%) scale(0.9);
 	}
 }
-</style> 
+</style>

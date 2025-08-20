@@ -1,185 +1,275 @@
+import { defineStore } from "pinia";
+
+export interface SearchBook {
+	title: string;
+	author: string;
+	year?: number;
+	coverUrl?: string;
+	ol_key?: string;
+	coverId?: string;
+}
+
+interface SearchApiResponse {
+	total: number;
+	items: SearchBook[];
+}
+
+interface CachedImageEntry {
+	data: string;
+	timestamp: number;
+}
+
+interface BookSearchState {
+	searchQuery: string;
+	searchResults: SearchBook[];
+	isSearching: boolean;
+	hasSearched: boolean;
+	recentSearches: string[]; // <-- solo se alimenta desde el backend
+	canGoBack: boolean;
+	imageCache: Map<string, CachedImageEntry>;
+	error: string | null;
+}
+
+const SEARCH_CONFIG = {
+	MAX_RESULTS: 10,
+	MAX_RECENT_SEARCHES: 5,
+	CACHE_DURATION_MS: 60 * 1000, // 1 minuto
+	IMAGE_TIMEOUT_MS: 2000, // 2 segundos
+	IMAGE_QUALITY: 0.8,
+	MAX_QUERY_LENGTH: 100,
+	MIN_QUERY_LENGTH: 1,
+} as const;
+
 export const useBookSearchStore = defineStore("bookSearch", {
-	state: () => ({
-		// Estado de búsqueda
+	state: (): BookSearchState => ({
 		searchQuery: "",
-		searchResults: [] as any[],
+		searchResults: [],
 		isSearching: false,
 		hasSearched: false,
-
-		// Búsquedas recientes
-		recentSearches: [] as string[],
-
-		// Estado de navegación
+		recentSearches: [], // backend is the source of truth
 		canGoBack: false,
-
-		// Cache de imágenes (URL -> { data: base64/url, timestamp: number })
-		imageCache: new Map() as Map<string, { data: string; timestamp: number }>,
+		imageCache: new Map<string, CachedImageEntry>(),
+		error: null,
 	}),
 
+	getters: {
+		hasResults: (state): boolean => state.searchResults.length > 0,
+		resultsCount: (state): number => state.searchResults.length,
+		hasRecentSearches: (state): boolean => state.recentSearches.length > 0,
+		isValidQuery: (state): boolean => {
+			const query = state.searchQuery.trim();
+			return query.length >= SEARCH_CONFIG.MIN_QUERY_LENGTH && query.length <= SEARCH_CONFIG.MAX_QUERY_LENGTH;
+		},
+		booksWithCovers: (state): SearchBook[] => state.searchResults.filter((book) => book.coverUrl),
+		cacheInfo: (state): { size: number; entries: number } => ({
+			size: state.imageCache.size,
+			entries: Array.from(state.imageCache.keys()).length,
+		}),
+	},
+
 	actions: {
-		async performSearch(query: string) {
-			if (!query.trim()) return;
+		validateSearchQuery(query: string): { isValid: boolean; error?: string } {
+			if (!query || typeof query !== "string") {
+				return { isValid: false, error: "La búsqueda debe ser un texto válido" };
+			}
+			const trimmedQuery = query.trim();
+			if (trimmedQuery.length < SEARCH_CONFIG.MIN_QUERY_LENGTH) {
+				return { isValid: false, error: "La búsqueda debe tener al menos 1 carácter" };
+			}
+			if (trimmedQuery.length > SEARCH_CONFIG.MAX_QUERY_LENGTH) {
+				return { isValid: false, error: "La búsqueda es demasiado larga" };
+			}
+			return { isValid: true };
+		},
+
+		handleError(error: unknown, context: string): void {
+			const errorMessage = error instanceof Error ? error.message : `Error desconocido en ${context}`;
+			this.error = errorMessage;
+			console.error(`[BookSearchStore] ${context}:`, error);
+		},
+
+		clearError(): void {
+			this.error = null;
+		},
+
+		async performSearch(query: string): Promise<void> {
+			const validation = this.validateSearchQuery(query);
+			if (!validation.isValid) {
+				this.handleError(new Error(validation.error), "validación de query");
+				return;
+			}
+
+			const trimmedQuery = query.trim();
+			if (this.isSearching && this.searchQuery === trimmedQuery) return;
 
 			this.isSearching = true;
 			this.hasSearched = true;
-			this.searchQuery = query;
+			this.searchQuery = trimmedQuery;
+			this.clearError();
 
 			try {
 				const { get } = useApi();
-				const response = await get<{ total: number; items: any[] }>(`/books/search?q=${encodeURIComponent(query)}`);
+				const response = await get<SearchApiResponse>(`/books/search?q=${encodeURIComponent(trimmedQuery)}`);
 
-				// Limitar a máximo 10 resultados
-				let results = response.items.slice(0, 10);
-
-				// Procesar imágenes con cache
-				results = await this.processImagesWithCache(results);
-
-				this.searchResults = results;
-
-				// Actualizar búsquedas recientes
-				if (!this.recentSearches.includes(query)) {
-					this.recentSearches.unshift(query);
-					// Mantener solo las últimas 5
-					this.recentSearches = this.recentSearches.slice(0, 5);
+				if (!response || typeof response !== "object" || !Array.isArray(response.items)) {
+					throw new Error("Respuesta inválida de la API");
 				}
 
-				this.canGoBack = false; // No hay necesidad de volver después de una búsqueda nueva
+				let results = response.items.slice(0, SEARCH_CONFIG.MAX_RESULTS);
+				results = await this.processImagesWithCache(results);
+				this.searchResults = results;
 
-				// Limpiar cache expirado
+				// NO cacheamos localmente; refrescamos desde el backend
+				this.loadRecentSearches().catch(() => {});
+				this.canGoBack = false;
+
 				this.cleanExpiredCache();
 			} catch (error) {
-				console.error("Error en la búsqueda:", error);
+				this.handleError(error, "búsqueda de libros");
 				this.searchResults = [];
 			} finally {
 				this.isSearching = false;
 			}
 		},
 
-		// Procesar imágenes con sistema de cache
-		async processImagesWithCache(items: any[]) {
-			const processedItems = await Promise.all(
-				items.map(async (item) => {
-					if (!item.coverUrl) return item;
+		async loadRecentSearches(): Promise<void> {
+			try {
+				const { get } = useApi();
+				const response = await get<{ searches: string[] }>("/books/last-search");
+				if (response && Array.isArray(response.searches)) {
+					this.recentSearches = response.searches
+						.filter((s) => typeof s === "string" && s.trim())
+						.slice(0, SEARCH_CONFIG.MAX_RECENT_SEARCHES);
+				}
+			} catch (error) {
+				this.handleError(error, "carga de búsquedas recientes");
+			}
+		},
 
-					// Verificar si la imagen está en cache
-					const cachedImage = this.getCachedImage(item.coverUrl);
-					if (cachedImage) {
-						return {
-							...item,
-							coverUrl: cachedImage,
-						};
-					}
+		async processImagesWithCache(items: SearchBook[]): Promise<SearchBook[]> {
+			try {
+				const processedItems = await Promise.allSettled(items.map((item) => this.processImageWithCache(item)));
+				return processedItems.map((result, index) => (result.status === "fulfilled" ? result.value : items[index]));
+			} catch (error) {
+				this.handleError(error, "procesamiento de imágenes");
+				return items;
+			}
+		},
 
-					// Si no está en cache, intentar cargar y cachear
+		async processImageWithCache(item: SearchBook): Promise<SearchBook> {
+			if (!item.coverUrl) return item;
+
+			const cachedImage = this.getCachedImage(item.coverUrl);
+			if (cachedImage) {
+				return { ...item, coverUrl: cachedImage };
+			}
+
+			try {
+				const imageResult = await this.loadImageWithTimeout(item.coverUrl);
+				if (imageResult !== item.coverUrl) {
+					this.setCachedImage(item.coverUrl, imageResult);
+				}
+				return { ...item, coverUrl: imageResult };
+			} catch (error) {
+				console.warn(`Error procesando imagen para "${item.title}":`, error);
+				return item;
+			}
+		},
+
+		async loadImageWithTimeout(url: string): Promise<string> {
+			const imagePromise = new Promise<string>((resolve, reject) => {
+				const img = new Image();
+				img.crossOrigin = "anonymous";
+
+				img.onload = () => {
 					try {
-						// Crear una promesa para cargar la imagen
-						const imagePromise = new Promise<string>((resolve, reject) => {
-							const img = new Image();
-							img.crossOrigin = "anonymous";
-							img.onload = () => {
-								try {
-									const canvas = document.createElement("canvas");
-									const ctx = canvas.getContext("2d");
-									canvas.width = img.width;
-									canvas.height = img.height;
-									ctx?.drawImage(img, 0, 0);
-									const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-									resolve(dataUrl);
-								} catch (error) {
-									resolve(item.coverUrl); // Fallback a URL original
-								}
-							};
-							img.onerror = () => resolve(item.coverUrl); // Fallback a URL original
-							img.src = item.coverUrl;
-						});
+						const canvas = document.createElement("canvas");
+						const ctx = canvas.getContext("2d");
+						if (!ctx) throw new Error("No se pudo obtener contexto del canvas");
 
-						// Timeout para no bloquear la UI
-						const timeoutPromise = new Promise<string>((resolve) => {
-							setTimeout(() => resolve(item.coverUrl), 2000);
-						});
+						canvas.width = img.width;
+						canvas.height = img.height;
+						ctx.drawImage(img, 0, 0);
 
-						const result = await Promise.race([imagePromise, timeoutPromise]);
-
-						// Guardar en cache solo si es diferente a la URL original
-						if (result !== item.coverUrl) {
-							this.setCachedImage(item.coverUrl, result);
-						}
-
-						return {
-							...item,
-							coverUrl: result,
-						};
+						const dataUrl = canvas.toDataURL("image/jpeg", SEARCH_CONFIG.IMAGE_QUALITY);
+						resolve(dataUrl);
 					} catch (error) {
-						console.error("Error al procesar la imagen:", error);
-						return item;
+						reject(new Error(`Error procesando imagen: ${error}`));
 					}
-				})
-			);
+				};
 
-			return processedItems;
+				img.onerror = () => reject(new Error(`Error cargando imagen: ${url}`));
+				img.src = url;
+			});
+
+			const timeoutPromise = new Promise<string>((resolve) => {
+				setTimeout(() => resolve(url), SEARCH_CONFIG.IMAGE_TIMEOUT_MS);
+			});
+
+			return Promise.race([imagePromise, timeoutPromise]);
 		},
 
-		setCanGoBack(value: boolean) {
-			this.canGoBack = value;
+		getCachedImage(url: string): string | null {
+			if (!url || typeof url !== "string") return null;
+			try {
+				const cached = this.imageCache.get(url);
+				if (cached && Date.now() - cached.timestamp < SEARCH_CONFIG.CACHE_DURATION_MS) {
+					return cached.data;
+				}
+				if (cached) this.imageCache.delete(url);
+			} catch (error) {
+				console.warn("Error accediendo al cache de imágenes:", error);
+			}
+			return null;
 		},
 
-		clearSearch() {
+		setCachedImage(url: string, data: string): void {
+			if (!url || !data || typeof url !== "string" || typeof data !== "string") return;
+			if (!data.startsWith("data:image/")) return;
+
+			try {
+				this.imageCache.set(url, { data, timestamp: Date.now() });
+			} catch (error) {
+				console.warn("Error guardando en cache de imágenes:", error);
+			}
+		},
+
+		cleanExpiredCache(): void {
+			try {
+				const now = Date.now();
+				const expiredKeys: string[] = [];
+				for (const [url, cached] of this.imageCache.entries()) {
+					if (now - cached.timestamp >= SEARCH_CONFIG.CACHE_DURATION_MS) {
+						expiredKeys.push(url);
+					}
+				}
+				expiredKeys.forEach((key) => this.imageCache.delete(key));
+			} catch (error) {
+				console.warn("Error limpiando cache de imágenes:", error);
+			}
+		},
+
+		setCanGoBack(value: boolean): void {
+			this.canGoBack = Boolean(value);
+		},
+
+		clearSearch(): void {
 			this.searchQuery = "";
 			this.searchResults = [];
 			this.hasSearched = false;
 			this.canGoBack = false;
+			this.clearError();
 		},
 
-		// Cargar búsquedas recientes desde la API
-		async loadRecentSearches() {
-			try {
-				const { get } = useApi();
-				const response = await get<{ searches: string[] }>("/books/last-search");
-				this.recentSearches = response.searches || [];
-			} catch (error) {
-				console.error("Error cargando búsquedas recientes:", error);
-			}
+		resetStore(): void {
+			this.searchQuery = "";
+			this.searchResults = [];
+			this.isSearching = false;
+			this.hasSearched = false;
+			this.recentSearches = [];
+			this.canGoBack = false;
+			this.imageCache.clear();
+			this.clearError();
 		},
-
-		// Cache de imágenes (1 minuto de duración)
-		getCachedImage(url: string): string | null {
-			const CACHE_DURATION = 60 * 1000; // 1 minuto
-			const cached = this.imageCache.get(url);
-
-			if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-				return cached.data;
-			}
-
-			// Si está expirado, eliminarlo
-			if (cached) {
-				this.imageCache.delete(url);
-			}
-
-			return null;
-		},
-
-		setCachedImage(url: string, data: string) {
-			this.imageCache.set(url, {
-				data,
-				timestamp: Date.now(),
-			});
-		},
-
-		// Limpiar cache expirado
-		cleanExpiredCache() {
-			const CACHE_DURATION = 60 * 1000; // 1 minuto
-			const now = Date.now();
-
-			for (const [url, cached] of this.imageCache.entries()) {
-				if (now - cached.timestamp >= CACHE_DURATION) {
-					this.imageCache.delete(url);
-				}
-			}
-		},
-	},
-
-	getters: {
-		hasResults: (state) => state.searchResults.length > 0,
-		resultsCount: (state) => state.searchResults.length,
 	},
 });
