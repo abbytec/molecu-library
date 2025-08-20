@@ -50,6 +50,10 @@ a:hover {
     justify-content: space-between;
 }
 
+.u-text-center {
+    text-align: center;
+}
+
 @function gap-size($n) {
     @return $n * 0.25rem; // escala base
 }
