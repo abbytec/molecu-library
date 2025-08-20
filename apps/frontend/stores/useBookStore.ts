@@ -1,4 +1,6 @@
 import { useNotificationStore } from "./useNotificationStore";
+import type { BookInput } from "@molecu-library/shared";
+import { validateBook } from "@molecu-library/shared";
 
 export const useBookStore = defineStore("book", {
 	state: () => ({
@@ -15,19 +17,7 @@ export const useBookStore = defineStore("book", {
 			this.selectedBook = null;
 		},
 
-		async saveBookToLibrary(
-			apiBase: string,
-			bookData: {
-				ol_key: string;
-				title: string;
-				author: string;
-				year?: number;
-				review: string;
-				rating: number;
-				coverId?: string;
-				coverUrl?: string;
-			}
-		) {
+		async saveBookToLibrary(apiBase: string, bookData: BookInput) {
 			this.isLoading = true;
 			try {
 				const response = await $fetch(`${apiBase}/books/my-library`, {

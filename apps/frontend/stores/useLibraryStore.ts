@@ -1,28 +1,6 @@
 import { useNotificationStore } from "./useNotificationStore";
-
-export interface LibraryBook {
-	_id: string;
-	ol_key: string;
-	title: string;
-	author: string;
-	year?: number;
-	review?: string;
-	rating?: number;
-	coverUrl?: string;
-}
-
-export interface LibraryFilters {
-	q: string;
-	sort: "rating_asc" | "rating_desc" | "";
-	withReview: boolean;
-}
-
-interface LibraryApiResponse {
-	items: LibraryBook[];
-	total: number;
-	page?: number;
-	limit?: number;
-}
+import type { BookWithId as LibraryBook, LibraryFilters, LibraryApiResponse } from "@molecu-library/shared";
+import { DEFAULT_LIBRARY_FILTERS, validateBook } from "@molecu-library/shared";
 
 interface LibraryState {
 	books: LibraryBook[];
@@ -32,18 +10,15 @@ interface LibraryState {
 	error: string | null;
 }
 
-const DEFAULT_FILTERS: LibraryFilters = {
-	q: "",
-	sort: "",
-	withReview: false,
-};
+// Exportamos los tipos para compatibilidad hacia atrás
+export type { LibraryBook, LibraryFilters, LibraryApiResponse };
 
 export const useLibraryStore = defineStore("library", {
 	state: (): LibraryState => ({
 		books: [],
 		isLoading: false,
 		total: 0,
-		filters: { ...DEFAULT_FILTERS },
+		filters: { ...DEFAULT_LIBRARY_FILTERS },
 		error: null,
 	}),
 
@@ -233,7 +208,7 @@ export const useLibraryStore = defineStore("library", {
 		},
 
 		clearFilters(): void {
-			this.filters = { ...DEFAULT_FILTERS };
+			this.filters = { ...DEFAULT_LIBRARY_FILTERS };
 		},
 
 		clearError(): void {
@@ -245,7 +220,7 @@ export const useLibraryStore = defineStore("library", {
 				books: [],
 				isLoading: false,
 				total: 0,
-				filters: { ...DEFAULT_FILTERS },
+				filters: { ...DEFAULT_LIBRARY_FILTERS },
 				error: null,
 			});
 		},

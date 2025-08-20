@@ -3,7 +3,6 @@ import AInput from "../atoms/AInput.vue";
 import AButton from "../atoms/AButton.vue";
 import { useAuthStore } from "~/stores/useAuthStore";
 const router = useRouter();
-const { post, get } = useApi();
 const username = ref("");
 const password = ref("");
 const errMessage = ref("");
@@ -15,7 +14,7 @@ const {
 async function login() {
 	try {
 		await authStore.login(apiBase, username.value, password.value);
-		router.replace("/home");
+		navigateTo("/home");
 	} catch (e: any) {
 		console.error(e);
 		errMessage.value = "Credenciales inválidas";

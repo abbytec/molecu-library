@@ -8,10 +8,16 @@
 	"main": "index.js",
 	"private": true,
 	"workspaces": [
-		"apps/*"
+		"apps/*",
+		"packages/*"
 	],
 	"scripts": {
 		"dev:api": "npm run dev --workspace=api",
-		"dev:front": "npm run dev --workspace=frontend"
+		"dev:front": "npm run dev --workspace=frontend",
+		"build:shared": "npm run build --workspace=shared"
+	},
+	"devDependencies": {
+		"typescript": "^5.9.2",
+		"@types/node": "^24.3.0"
 	}
 }
