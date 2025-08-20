@@ -187,6 +187,45 @@ const ApiService: ServiceSchema = {
 						}
 					},
 
+					// ============ GET BOOK BY KEY ============
+					// GET /api/books/by-key/:ol_key
+					"GET books/by-key/:ol_key": async function (req: any, res: any) {
+						try {
+							const $ctx = req.$ctx;
+							const payload = requireSession(req, res, $ctx);
+							if (!payload) return;
+
+							const ol_key = decodeURIComponent(req.$params.ol_key);
+
+							if (!ol_key || ol_key === "unknown") {
+								return sendJSON(res, 400, { ok: false, error: "Invalid or missing ol_key" });
+							}
+
+							const bookData = await $ctx.broker.call("openLibrary.getByKey", { ol_key }, { meta: $ctx?.meta });
+
+							if (!bookData) {
+								return sendJSON(res, 404, { ok: false, error: "Book not found" });
+							}
+
+							// Verificar si el libro ya está en la biblioteca del usuario
+							let localId: string | null = null;
+							try {
+								localId = await $ctx.broker.call("library.findByOlKey", { ol_key }, { meta: $ctx?.meta });
+								if (localId) {
+									// Si está en biblioteca, usar la portada local
+									bookData.coverUrl = `/api/books/library/front-cover/${localId}`;
+								}
+							} catch {
+								// No está en biblioteca, usar portada de OpenLibrary
+							}
+
+							return sendJSON(res, 200, { ok: true, book: bookData });
+						} catch (e) {
+							req.$ctx?.broker.logger.error("GET /api/books/by-key error:", e);
+							return sendJSON(res, 500, { ok: false, error: "Internal error" });
+						}
+					},
+
 					// ============ MY LIBRARY ============
 					// GET /api/books/my-library
 					"GET books/my-library": async function (req: any, res: any) {

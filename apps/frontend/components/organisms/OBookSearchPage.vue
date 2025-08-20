@@ -22,7 +22,7 @@
 			<div v-else class="book-search-page__results-grid">
 				<h3 class="book-search-page__results-title">Resultados de búsqueda para: "{{ lastSearchQuery }}"</h3>
 				<div class="book-search-page__grid">
-					<ABookCard v-for="book in searchResults" :key="book.ol_key || book.title" :book="book" />
+					<ABookCard v-for="book in searchResults" :key="book.ol_key || book.title" :book="book" @click="handleBookClick" />
 				</div>
 			</div>
 		</div>
@@ -30,72 +30,47 @@
 </template>
 
 <script setup lang="ts">
-import { useApi } from "~/composables/useApi";
 import MBookSearch from "~/components/molecules/MBookSearch.vue";
 import MRecentSearches from "~/components/molecules/MRecentSearches.vue";
 import ABookCard from "~/components/atoms/ABookCard.vue";
-import { ref, onMounted } from "vue";
+import { useBookSearchStore } from "~/stores/useBookSearchStore";
+import { useBookStore } from "~/stores/useBookStore";
+import { ref, onMounted, computed, nextTick } from "vue";
 
 interface Book {
 	title: string;
 	author: string;
+	year?: number;
 	coverUrl?: string;
 	ol_key?: string;
-}
-
-interface SearchResponse {
-	total: number;
-	items: Book[];
-}
-
-interface RecentSearchesResponse {
-	searches: string[];
+	coverId?: string;
 }
 
 const searchComponent = ref();
-const isSearching = ref(false);
-const hasSearched = ref(false);
-const searchResults = ref<Book[]>([]);
-const recentSearches = ref<string[]>([]);
-const lastSearchQuery = ref("");
+const bookSearchStore = useBookSearchStore();
+const bookStore = useBookStore();
 
-const { get } = useApi();
+// Computed properties para usar el estado del store
+const isSearching = computed(() => bookSearchStore.isSearching);
+const hasSearched = computed(() => bookSearchStore.hasSearched);
+const searchResults = computed(() => bookSearchStore.searchResults);
+const recentSearches = computed(() => bookSearchStore.recentSearches);
+const lastSearchQuery = computed(() => bookSearchStore.searchQuery);
 
 // Cargar búsquedas recientes al montar el componente
 onMounted(async () => {
-	try {
-		const response = await get<RecentSearchesResponse>("/books/last-search");
-		recentSearches.value = response.searches || [];
-	} catch (error) {
-		console.error("Error cargando búsquedas recientes:", error);
+	await bookSearchStore.loadRecentSearches();
+	
+	// Si hay una búsqueda previa y resultados, actualizar el campo de búsqueda
+	if (bookSearchStore.searchQuery && searchComponent.value) {
+		nextTick(() => {
+			searchComponent.value.setSearch(bookSearchStore.searchQuery);
+		});
 	}
 });
 
 const handleSearch = async (query: string) => {
-	if (!query.trim()) return;
-
-	isSearching.value = true;
-	hasSearched.value = true;
-	lastSearchQuery.value = query;
-
-	try {
-		const response = await get<SearchResponse>(`/books/search?q=${encodeURIComponent(query)}`);
-
-		// Limitar a máximo 10 resultados
-		searchResults.value = response.items.slice(0, 10);
-
-		// Actualizar búsquedas recientes
-		if (!recentSearches.value.includes(query)) {
-			recentSearches.value.unshift(query);
-			// Mantener solo las últimas 5
-			recentSearches.value = recentSearches.value.slice(0, 5);
-		}
-	} catch (error) {
-		console.error("Error en la búsqueda:", error);
-		searchResults.value = [];
-	} finally {
-		isSearching.value = false;
-	}
+	await bookSearchStore.performSearch(query);
 };
 
 const handleRecentSearchClick = (query: string) => {
@@ -103,6 +78,20 @@ const handleRecentSearchClick = (query: string) => {
 		searchComponent.value.setSearch(query);
 		handleSearch(query);
 	}
+};
+
+const handleBookClick = (book: Book) => {
+	// Guardar el libro seleccionado en el store
+	bookStore.setSelectedBook(book);
+	
+	// Marcar que se puede volver a los resultados
+	bookSearchStore.setCanGoBack(true);
+	
+	// Encodear la key para manejar caracteres especiales como slashes
+	const encodedKey = encodeURIComponent(book.ol_key || 'unknown');
+	
+	// Navegar a la página de detalles
+	navigateTo(`/book/${encodedKey}`);
 };
 </script>
 

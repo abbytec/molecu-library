@@ -1,5 +1,5 @@
 <template>
-	<div class="book-card">
+	<div class="book-card" @click="handleCardClick">
 		<div class="book-card__cover">
 			<img v-if="book.coverUrl" :src="book.coverUrl" :alt="`Portada de ${book.title}`" class="book-card__image" @error="onImageError" />
 			<div v-else class="book-card__placeholder">
@@ -9,6 +9,7 @@
 		<div class="book-card__content">
 			<h3 class="book-card__title">{{ book.title }}</h3>
 			<p class="book-card__author">{{ book.author }}</p>
+			<p v-if="book.year" class="book-card__year">{{ book.year }}</p>
 		</div>
 	</div>
 </template>
@@ -17,13 +18,23 @@
 interface Book {
 	title: string;
 	author: string;
+	year?: number;
 	coverUrl?: string;
 	ol_key?: string;
+	coverId?: string;
 }
 
-defineProps<{
+const props = defineProps<{
 	book: Book;
 }>();
+
+const emit = defineEmits<{
+	click: [book: Book];
+}>();
+
+const handleCardClick = () => {
+	emit('click', props.book);
+};
 
 const onImageError = (event: Event) => {
 	const img = event.target as HTMLImageElement;
@@ -102,6 +113,13 @@ const onImageError = (event: Event) => {
 		-webkit-line-clamp: 1;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
+	}
+
+	&__year {
+		margin: 0.25rem 0 0 0;
+		font-size: 0.75rem;
+		color: $text-muted;
+		font-weight: 500;
 	}
 }
 </style>
