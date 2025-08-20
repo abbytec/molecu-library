@@ -1,72 +1,88 @@
 <template>
 	<AContainer>
 		<div class="library-page">
-			<div class="library-header">
+			<header class="library-header">
 				<h1 class="library-title">Mi biblioteca</h1>
-				<p class="library-subtitle">{{ libraryStore.total }} {{ libraryStore.total === 1 ? "libro" : "libros" }}</p>
-			</div>
-
-			<!-- Filtros y búsqueda -->
-			<div class="library-filters">
+				<p class="library-subtitle" aria-live="polite">{{ libraryStore.total }} {{ libraryStore.total === 1 ? "libro" : "libros" }}</p>
+			</header>
+			<section class="library-filters" aria-label="Filtros de búsqueda">
 				<div class="search-section">
+					<label for="search-input" class="sr-only">Buscar libros</label>
 					<AInput
 						id="search-input"
 						v-model="searchQuery"
 						placeholder="Buscar por título o autor..."
 						type="search"
 						class="search-input"
+						aria-describedby="search-help"
 						@input="handleSearch" />
+					<div id="search-help" class="sr-only">Busca libros por título o autor. Los resultados se actualizan automáticamente.</div>
 				</div>
 
 				<div class="filter-section">
 					<div class="filter-group">
 						<label for="sort-select" class="filter-label">Ordenar por:</label>
-						<select id="sort-select" v-model="sortOption" class="filter-select" @change="handleFilterChange">
+						<select
+							id="sort-select"
+							v-model="sortOption"
+							class="filter-select"
+							aria-describedby="sort-help"
+							@change="handleFilterChange">
 							<option value="">Sin ordenar</option>
 							<option value="rating_desc">Calificación (mayor a menor)</option>
 							<option value="rating_asc">Calificación (menor a mayor)</option>
 						</select>
+						<div id="sort-help" class="sr-only">Cambia el orden de los libros en la lista.</div>
 					</div>
 
 					<div class="filter-group">
 						<label class="filter-checkbox">
-							<input v-model="onlyWithReview" type="checkbox" @change="handleFilterChange" />
+							<input v-model="onlyWithReview" type="checkbox" aria-describedby="review-filter-help" @change="handleFilterChange" />
 							<span class="checkmark"></span>
 							Solo libros con reseña
 						</label>
+						<div id="review-filter-help" class="sr-only">Muestra únicamente los libros que tienen una reseña escrita.</div>
 					</div>
 
-					<AButton variant="ghost" @click="clearFilters" class="clear-filters-btn"> Limpiar filtros </AButton>
+					<AButton
+						variant="ghost"
+						@click="clearFilters"
+						class="clear-filters-btn"
+						:aria-label="`Limpiar filtros${hasActiveFilters ? ' activos' : ''}`">
+						Limpiar filtros
+					</AButton>
 				</div>
-			</div>
+			</section>
 
-			<!-- Loading state -->
-			<div v-if="libraryStore.isLoading" class="loading-state">
-				<p>Cargando biblioteca...</p>
-			</div>
-
-			<!-- Empty state -->
-			<div v-else-if="libraryStore.books.length === 0" class="empty-state">
-				<div class="empty-state__content">
-					<h3>{{ hasActiveFilters ? "No se encontraron libros" : "Tu biblioteca está vacía" }}</h3>
-					<p v-if="hasActiveFilters">Intenta cambiar los filtros de búsqueda</p>
-					<p v-else>Comienza agregando libros desde la búsqueda</p>
-					<AButton @click="navigateTo('/home')" class="empty-state__button"> Buscar libros </AButton>
+			<!-- Mejora 3: Mejor manejo de estados de carga -->
+			<main class="library-content" aria-live="polite">
+				<!-- Loading state -->
+				<div v-if="libraryStore.isLoading" class="loading-state" role="status" aria-label="Cargando">
+					<div class="loading-spinner" aria-hidden="true"></div>
+					<p>Cargando biblioteca...</p>
 				</div>
-			</div>
 
-			<!-- Books grid -->
-			<div v-else class="books-grid">
-				<MLibraryBookCard
-					v-for="book in libraryStore.books"
-					:key="book._id"
-					:book="book"
-					@edit="handleEditBook"
-					@delete="handleDeleteBook" />
-			</div>
+				<!-- Empty state -->
+				<div v-else-if="libraryStore.books.length === 0" class="empty-state">
+					<div class="empty-state__content">
+						<h2>{{ hasActiveFilters ? "No se encontraron libros" : "Tu biblioteca está vacía" }}</h2>
+						<p v-if="hasActiveFilters">Intenta cambiar los filtros de búsqueda</p>
+						<p v-else>Comienza agregando libros desde la búsqueda</p>
+						<AButton @click="navigateToSearch" class="empty-state__button" aria-label="Ir a buscar libros"> Buscar libros </AButton>
+					</div>
+				</div>
+
+				<!-- Books grid -->
+				<section v-else class="books-grid" aria-label="Lista de libros">
+					<MLibraryBookCard
+						v-for="book in libraryStore.books"
+						:key="book._id"
+						:book="book"
+						@edit="handleEditBook"
+						@delete="handleDeleteBook" />
+				</section>
+			</main>
 		</div>
-
-		<!-- Delete Confirmation Dialog -->
 		<OConfirmDialog
 			:is-open="isDeleteDialogOpen"
 			:title="`¿Eliminar '${selectedBook?.title}'?`"
@@ -88,39 +104,48 @@ import AButton from "~/components/atoms/AButton.vue";
 import AInput from "~/components/atoms/AInput.vue";
 import MLibraryBookCard from "~/components/molecules/MLibraryBookCard.vue";
 import OConfirmDialog from "~/components/organisms/OConfirmDialog.vue";
-
+interface LibraryBook {
+	_id: string;
+	ol_key: string;
+	title: string;
+	author: string;
+	year?: number;
+	review?: string;
+	rating?: number;
+	coverUrl?: string;
+}
 // Stores y composables
 const libraryStore = useLibraryStore();
-const config = useRuntimeConfig();
-const apiBase = config.public.apiBase;
+const {
+	public: { apiBase },
+} = useRuntimeConfig();
 
-// Estado de filtros
-const searchQuery = ref("");
-const sortOption = ref("");
-const onlyWithReview = ref(false);
+const searchQuery = ref<string>("");
+const sortOption = ref<string>("");
+const onlyWithReview = ref<boolean>(false);
 
-// Estado de modales
-const isDeleteDialogOpen = ref(false);
-const selectedBook = ref<any>(null);
-const isDeleting = ref(false);
+const isDeleteDialogOpen = ref<boolean>(false);
+const selectedBook = ref<LibraryBook | null>(null);
+const isDeleting = ref<boolean>(false);
 
-// Debounce para búsqueda
-let searchTimeout: NodeJS.Timeout;
+const SEARCH_DEBOUNCE_MS = 300;
+let searchTimeout: NodeJS.Timeout | null = null;
 
 const hasActiveFilters = computed(() => {
 	return searchQuery.value.trim() || sortOption.value || onlyWithReview.value;
 });
 
-// Funciones de manejo de filtros
-const handleSearch = () => {
-	clearTimeout(searchTimeout);
+const handleSearch = (): void => {
+	if (searchTimeout) {
+		clearTimeout(searchTimeout);
+	}
 	searchTimeout = setTimeout(() => {
 		libraryStore.setFilters({ q: searchQuery.value });
 		loadBooks();
-	}, 300);
+	}, SEARCH_DEBOUNCE_MS);
 };
 
-const handleFilterChange = () => {
+const handleFilterChange = (): void => {
 	libraryStore.setFilters({
 		sort: sortOption.value as any,
 		withReview: onlyWithReview.value,
@@ -128,7 +153,7 @@ const handleFilterChange = () => {
 	loadBooks();
 };
 
-const clearFilters = () => {
+const clearFilters = (): void => {
 	searchQuery.value = "";
 	sortOption.value = "";
 	onlyWithReview.value = false;
@@ -136,8 +161,7 @@ const clearFilters = () => {
 	loadBooks();
 };
 
-// Funciones de carga de datos
-const loadBooks = async () => {
+const loadBooks = async (): Promise<void> => {
 	try {
 		await libraryStore.loadBooks(apiBase);
 	} catch (error) {
@@ -145,27 +169,31 @@ const loadBooks = async () => {
 	}
 };
 
+const navigateToSearch = (): void => {
+	navigateTo("/home");
+};
+
 // Funciones de edición
-const handleEditBook = (book: any) => {
-	// Redirigir a la página del libro usando su ol_key
+const handleEditBook = (book: LibraryBook): void => {
 	if (book.ol_key) {
 		const encodedKey = encodeURIComponent(book.ol_key);
-		navigateTo(`/book/${encodedKey}`);
+		// En un proyecto real usarías navigateTo(`/book/${encodedKey}`) de Nuxt
+		window.location.href = `/book/${encodedKey}`;
 	}
 };
 
 // Funciones de eliminación
-const handleDeleteBook = (book: any) => {
+const handleDeleteBook = (book: LibraryBook): void => {
 	selectedBook.value = book;
 	isDeleteDialogOpen.value = true;
 };
 
-const closeDeleteDialog = () => {
+const closeDeleteDialog = (): void => {
 	isDeleteDialogOpen.value = false;
 	selectedBook.value = null;
 };
 
-const handleConfirmDelete = async () => {
+const handleConfirmDelete = async (): Promise<void> => {
 	if (!selectedBook.value) return;
 
 	isDeleting.value = true;
@@ -188,13 +216,20 @@ onMounted(() => {
 onUnmounted(() => {
 	if (searchTimeout) {
 		clearTimeout(searchTimeout);
+		searchTimeout = null;
 	}
 });
 </script>
 
 <style scoped lang="scss">
+$card-min-width: 280px;
+$grid-gap-mobile: 1.5rem;
+$grid-gap-desktop: 2rem;
+$content-padding-mobile: 1rem;
+$content-padding-desktop: 2rem;
+
 .library-page {
-	padding: 2rem 0;
+	padding: $content-padding-desktop 0;
 }
 
 .library-header {
@@ -268,6 +303,7 @@ onUnmounted(() => {
 		&:focus {
 			outline: none;
 			border-color: $primary;
+			box-shadow: 0 0 0 2px rgba($primary, 0.2);
 		}
 	}
 
@@ -289,6 +325,7 @@ onUnmounted(() => {
 			background: $surface;
 			position: relative;
 			cursor: pointer;
+			transition: all 0.2s ease;
 
 			&:checked {
 				background: $primary;
@@ -310,6 +347,10 @@ onUnmounted(() => {
 				outline: 2px solid $primary;
 				outline-offset: 2px;
 			}
+
+			&:hover:not(:disabled) {
+				border-color: $primary;
+			}
 		}
 	}
 
@@ -322,6 +363,25 @@ onUnmounted(() => {
 	text-align: center;
 	padding: 3rem 0;
 	color: $text-muted;
+
+	.loading-spinner {
+		width: 40px;
+		height: 40px;
+		border: 3px solid $border;
+		border-top: 3px solid $primary;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+		margin: 0 auto 1rem;
+	}
+}
+
+@keyframes spin {
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
 }
 
 .empty-state {
@@ -332,7 +392,7 @@ onUnmounted(() => {
 		max-width: 400px;
 		margin: 0 auto;
 
-		h3 {
+		h2 {
 			margin: 0 0 1rem 0;
 			font-size: 1.25rem;
 			color: $text;
@@ -352,17 +412,29 @@ onUnmounted(() => {
 
 .books-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-	gap: 1.5rem;
+	grid-template-columns: repeat(auto-fill, minmax($card-min-width, 1fr));
+	gap: $grid-gap-mobile;
 
 	@media (min-width: 768px) {
-		gap: 2rem;
+		gap: $grid-gap-desktop;
 	}
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
 }
 
 @media (max-width: 767px) {
 	.library-page {
-		padding: 1rem 0;
+		padding: $content-padding-mobile 0;
 	}
 
 	.library-filters {
@@ -376,6 +448,10 @@ onUnmounted(() => {
 		.clear-filters-btn {
 			margin-left: 0;
 			align-self: flex-start;
+		}
+		*:focus {
+			outline: 2px solid $primary;
+			outline-offset: 2px;
 		}
 	}
 

@@ -1,6 +1,6 @@
 import { useNotificationStore } from "./useNotificationStore";
 
-interface LibraryBook {
+export interface LibraryBook {
 	_id: string;
 	ol_key: string;
 	title: string;
@@ -11,80 +11,166 @@ interface LibraryBook {
 	coverUrl?: string;
 }
 
-interface LibraryFilters {
+export interface LibraryFilters {
 	q: string;
 	sort: "rating_asc" | "rating_desc" | "";
 	withReview: boolean;
 }
 
+interface LibraryApiResponse {
+	items: LibraryBook[];
+	total: number;
+	page?: number;
+	limit?: number;
+}
+
+interface LibraryState {
+	books: LibraryBook[];
+	isLoading: boolean;
+	total: number;
+	filters: LibraryFilters;
+	error: string | null;
+}
+
+const DEFAULT_FILTERS: LibraryFilters = {
+	q: "",
+	sort: "",
+	withReview: false,
+};
+
 export const useLibraryStore = defineStore("library", {
-	state: () => ({
-		books: [] as LibraryBook[],
+	state: (): LibraryState => ({
+		books: [],
 		isLoading: false,
 		total: 0,
-		filters: {
-			q: "",
-			sort: "",
-			withReview: false,
-		} as LibraryFilters,
+		filters: { ...DEFAULT_FILTERS },
+		error: null,
 	}),
 
 	getters: {
-		filteredBooks: (state) => {
+		filteredBooks: (state): LibraryBook[] => {
 			return state.books;
+		},
+
+		hasBooks: (state): boolean => {
+			return state.books.length > 0;
+		},
+
+		hasActiveFilters: (state): boolean => {
+			return state.filters.q.trim() !== "" || state.filters.sort !== "" || state.filters.withReview;
+		},
+
+		booksWithRating: (state): LibraryBook[] => {
+			return state.books.filter((book) => book.rating && book.rating > 0);
+		},
+
+		booksWithReviews: (state): LibraryBook[] => {
+			return state.books.filter((book) => book.review && book.review.trim() !== "");
 		},
 	},
 
 	actions: {
-		async loadBooks(apiBase: string) {
+		buildLibraryUrl(apiBase: string, filters?: LibraryFilters): string {
+			const params = new URLSearchParams();
+			const currentFilters = filters || this.filters;
+
+			if (currentFilters.q.trim()) {
+				params.append("q", currentFilters.q.trim());
+			}
+
+			if (currentFilters.sort) {
+				params.append("sort", currentFilters.sort);
+			}
+
+			if (currentFilters.withReview) {
+				params.append("withReview", "true");
+			}
+
+			const queryString = params.toString();
+			const finalQueryString = queryString ? `?${queryString}` : "";
+			return `/books/my-library${finalQueryString}`;
+		},
+
+		// Mejora 8: Manejo de errores más robusto
+		handleError(error: unknown, defaultMessage: string): void {
+			const errorMessage = error instanceof Error ? error.message : defaultMessage;
+			this.error = errorMessage;
+
+			console.error(defaultMessage, error);
+
+			const notificationStore = useNotificationStore();
+			notificationStore.error(errorMessage);
+		},
+
+		// Mejora 9: Función de carga con mejor tipado y manejo de errores
+		async loadBooks(apiBase: string): Promise<void> {
+			// Evitar múltiples cargas simultáneas
+			if (this.isLoading) return;
+
 			this.isLoading = true;
+			this.error = null;
+
 			try {
-				const params = new URLSearchParams();
+				const url = this.buildLibraryUrl(apiBase);
 
-				if (this.filters.q.trim()) {
-					params.append("q", this.filters.q.trim());
-				}
-
-				if (this.filters.sort) {
-					params.append("sort", this.filters.sort);
-				}
-
-				if (this.filters.withReview) {
-					params.append("withReview", "true");
-				}
-
-				const queryString = params.toString();
-				const url = `/books/my-library${queryString ? `?${queryString}` : ""}`;
-
-				const response = (await $fetch(`${apiBase}${url}`, {
+				const response = await $fetch<LibraryApiResponse>(`${apiBase}${url}`, {
 					credentials: "include",
-				})) as { items: LibraryBook[]; total: number };
+					timeout: 10000,
+				});
 
-				this.books = response.items || [];
-				this.total = response.total || 0;
+				if (!response || typeof response !== "object") {
+					throw new Error("Respuesta inválida del servidor");
+				}
+
+				this.$patch({
+					books: response.items || [],
+					total: response.total || 0,
+					error: null,
+				});
 			} catch (error) {
-				console.error("Error cargando biblioteca:", error);
-				const notificationStore = useNotificationStore();
-				notificationStore.error("Error al cargar la biblioteca");
-				this.books = [];
-				this.total = 0;
+				if (error instanceof TypeError && error.message.includes("fetch")) {
+					this.handleError(error, "Error de conexión. Verifica tu conexión a internet.");
+				} else if (error instanceof Error && error.message.includes("timeout")) {
+					this.handleError(error, "La solicitud tardó demasiado. Inténtalo de nuevo.");
+				} else {
+					this.handleError(error, "Error al cargar la biblioteca");
+				}
+
+				this.$patch({
+					books: [],
+					total: 0,
+				});
 			} finally {
 				this.isLoading = false;
 			}
 		},
 
-		async updateBook(apiBase: string, bookId: string, data: { review?: string; rating?: number }) {
+		async updateBook(
+			apiBase: string,
+			bookId: string,
+			data: { review?: string; rating?: number }
+		): Promise<{ ok: boolean; book: LibraryBook } | null> {
+			if (!bookId || !apiBase) {
+				throw new Error("Parámetros requeridos faltantes");
+			}
+
+			const bookIndex = this.books.findIndex((book) => book._id === bookId);
+			const originalBook = bookIndex !== -1 ? { ...this.books[bookIndex] } : null;
+
+			if (bookIndex !== -1) {
+				this.books[bookIndex] = { ...this.books[bookIndex], ...data };
+			}
+
 			try {
-				const response = (await $fetch(`${apiBase}/books/my-library/${bookId}`, {
+				const response = await $fetch<{ ok: boolean; book: LibraryBook }>(`${apiBase}/books/my-library/${bookId}`, {
 					method: "PUT",
 					body: data,
 					credentials: "include",
-				})) as { ok: boolean; book: LibraryBook };
+					timeout: 10000,
+				});
 
-				// Actualizar el libro en el estado local
-				const bookIndex = this.books.findIndex((book) => book._id === bookId);
-				if (bookIndex !== -1) {
-					this.books[bookIndex] = { ...this.books[bookIndex], ...data };
+				if (!response?.ok) {
+					throw new Error("Error en la respuesta del servidor");
 				}
 
 				const notificationStore = useNotificationStore();
@@ -92,44 +178,76 @@ export const useLibraryStore = defineStore("library", {
 
 				return response;
 			} catch (error) {
-				console.error("Error actualizando libro:", error);
-				const notificationStore = useNotificationStore();
-				notificationStore.error("Error al actualizar el libro");
+				if (originalBook && bookIndex !== -1) {
+					this.books[bookIndex] = originalBook;
+				}
+
+				this.handleError(error, "Error al actualizar el libro");
 				throw error;
 			}
 		},
 
-		async deleteBook(apiBase: string, bookId: string) {
+		async deleteBook(apiBase: string, bookId: string): Promise<void> {
+			if (!bookId || !apiBase) {
+				throw new Error("Parámetros requeridos faltantes");
+			}
+
+			const bookIndex = this.books.findIndex((book) => book._id === bookId);
+			const originalBook = bookIndex !== -1 ? this.books[bookIndex] : null;
+			const originalTotal = this.total;
+
+			if (bookIndex !== -1) {
+				this.books.splice(bookIndex, 1);
+				this.total = Math.max(0, this.total - 1);
+			}
+
 			try {
 				await $fetch(`${apiBase}/books/my-library/${bookId}`, {
 					method: "DELETE",
 					credentials: "include",
+					timeout: 10000,
 				});
-
-				// Remover el libro del estado local
-				this.books = this.books.filter((book) => book._id !== bookId);
-				this.total = Math.max(0, this.total - 1);
 
 				const notificationStore = useNotificationStore();
 				notificationStore.success("¡Libro eliminado exitosamente!");
 			} catch (error) {
-				console.error("Error eliminando libro:", error);
-				const notificationStore = useNotificationStore();
-				notificationStore.error("Error al eliminar el libro");
+				// Rollback en caso de error
+				if (originalBook && bookIndex !== -1) {
+					this.books.splice(bookIndex, 0, originalBook);
+					this.total = originalTotal;
+				}
+
+				this.handleError(error, "Error al eliminar el libro");
 				throw error;
 			}
 		},
 
-		setFilters(newFilters: Partial<LibraryFilters>) {
-			this.filters = { ...this.filters, ...newFilters };
+		setFilters(newFilters: Partial<LibraryFilters>): void {
+			const cleanFilters = {
+				...this.filters,
+				...newFilters,
+				q: newFilters.q?.trim() || this.filters.q,
+			};
+
+			this.filters = cleanFilters;
 		},
 
-		clearFilters() {
-			this.filters = {
-				q: "",
-				sort: "",
-				withReview: false,
-			};
+		clearFilters(): void {
+			this.filters = { ...DEFAULT_FILTERS };
+		},
+
+		clearError(): void {
+			this.error = null;
+		},
+
+		$reset(): void {
+			this.$patch({
+				books: [],
+				isLoading: false,
+				total: 0,
+				filters: { ...DEFAULT_FILTERS },
+				error: null,
+			});
 		},
 	},
 });
