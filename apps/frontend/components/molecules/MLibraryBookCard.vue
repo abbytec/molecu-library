@@ -39,24 +39,15 @@
 import AButton from "../atoms/AButton.vue";
 import ADangerButton from "../atoms/ADangerButton.vue";
 import ARating from "../atoms/ARating.vue";
-interface LibraryBook {
-	_id: string;
-	ol_key: string;
-	title: string;
-	author: string;
-	year?: number;
-	review?: string;
-	rating?: number;
-	coverUrl?: string;
-}
+import type { BookWithId } from "shared";
 
 const props = defineProps<{
-	book: LibraryBook;
+	book: BookWithId;
 }>();
 
 const emit = defineEmits<{
-	edit: [book: LibraryBook];
-	delete: [book: LibraryBook];
+	edit: [book: BookWithId];
+	delete: [book: BookWithId];
 }>();
 
 const ratingLabels = {

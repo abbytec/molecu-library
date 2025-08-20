@@ -15,14 +15,7 @@
 </template>
 
 <script setup lang="ts">
-interface Book {
-	title: string;
-	author: string;
-	year?: number;
-	coverUrl?: string;
-	ol_key?: string;
-	coverId?: string;
-}
+import type { Book } from "shared";
 
 const props = defineProps<{
 	book: Book;

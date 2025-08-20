@@ -104,16 +104,7 @@ import AButton from "~/components/atoms/AButton.vue";
 import AInput from "~/components/atoms/AInput.vue";
 import MLibraryBookCard from "~/components/molecules/MLibraryBookCard.vue";
 import OConfirmDialog from "~/components/organisms/OConfirmDialog.vue";
-interface LibraryBook {
-	_id: string;
-	ol_key: string;
-	title: string;
-	author: string;
-	year?: number;
-	review?: string;
-	rating?: number;
-	coverUrl?: string;
-}
+import type { BookWithId } from "shared";
 // Stores y composables
 const libraryStore = useLibraryStore();
 const {
@@ -125,7 +116,7 @@ const sortOption = ref<string>("");
 const onlyWithReview = ref<boolean>(false);
 
 const isDeleteDialogOpen = ref<boolean>(false);
-const selectedBook = ref<LibraryBook | null>(null);
+const selectedBook = ref<BookWithId | null>(null);
 const isDeleting = ref<boolean>(false);
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -174,7 +165,7 @@ const navigateToSearch = (): void => {
 };
 
 // Funciones de edición
-const handleEditBook = (book: LibraryBook): void => {
+const handleEditBook = (book: BookWithId): void => {
 	if (book.ol_key) {
 		const encodedKey = encodeURIComponent(book.ol_key);
 		// En un proyecto real usarías navigateTo(`/book/${encodedKey}`) de Nuxt
@@ -183,7 +174,7 @@ const handleEditBook = (book: LibraryBook): void => {
 };
 
 // Funciones de eliminación
-const handleDeleteBook = (book: LibraryBook): void => {
+const handleDeleteBook = (book: BookWithId): void => {
 	selectedBook.value = book;
 	isDeleteDialogOpen.value = true;
 };
