@@ -6,8 +6,17 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
 	if (to.path !== "/") {
 		if (!store.ok || !store.ready) {
-			const ok = await store.me(config.public.apiBase);
-			if (!ok) return navigateTo("/", { replace: true });
+			try {
+				const ok = await store.me(config.public.apiBase, true);
+				if (!ok) {
+					if (!store.username || !store.password) {
+						return navigateTo("/", { replace: true });
+					}
+				}
+			} catch (error: any) {
+				console.error("Error verifying credentials:", error);
+				return navigateTo("/", { replace: true });
+			}
 		}
 	}
 });

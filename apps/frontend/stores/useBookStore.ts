@@ -1,6 +1,6 @@
 import { useNotificationStore } from "./useNotificationStore";
+import { useAuthStore } from "./useAuthStore";
 import type { BookInput } from "shared";
-import { validateBook } from "shared";
 
 export const useBookStore = defineStore("book", {
 	state: () => ({
@@ -20,10 +20,11 @@ export const useBookStore = defineStore("book", {
 		async saveBookToLibrary(apiBase: string, bookData: BookInput) {
 			this.isLoading = true;
 			try {
+				const authStore = useAuthStore();
 				const response = await $fetch(`${apiBase}/books/my-library`, {
 					method: "POST",
 					body: bookData,
-					credentials: "include",
+					headers: authStore.authHeaders,
 				});
 
 				const notificationStore = useNotificationStore();

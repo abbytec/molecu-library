@@ -115,8 +115,10 @@ const config = useRuntimeConfig();
 // Importar stores dinámicamente para evitar errores de TypeScript
 const { useBookStore } = await import("~/stores/useBookStore");
 const { useBookSearchStore } = await import("~/stores/useBookSearchStore");
+const { useAuthStore } = await import("~/stores/useAuthStore");
 const bookStore = useBookStore();
 const bookSearchStore = useBookSearchStore();
+const authStore = useAuthStore();
 
 const formData = ref({
 	rating: 0,
@@ -136,11 +138,10 @@ const fetchBookByKey = async (ol_key) => {
 
 	try {
 		const response = await $fetch(`${config.public.apiBase}/books/by-key/${encodeURIComponent(ol_key)}`, {
-			credentials: "include",
+			headers: authStore.authHeaders,
 		});
 
 		if (response.ok && response.book) {
-			// Guardar el libro en el store
 			bookStore.setSelectedBook(response.book);
 			return response.book;
 		} else {

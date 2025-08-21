@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variables de configuración
-BASE_URL="http://localhost:8080"
+BASE_URL="http://localhost:8181"
 USERNAME="admin"
 PASSWORD="secret"
 

@@ -1,47 +1,50 @@
 import type { ServiceSchema } from "moleculer";
 import ApiGateway from "moleculer-web";
-import { signSession, verifySession } from "../utils/session.js";
-import { parseCookies, buildCookie } from "../utils/cookies.js";
 import { sendJSON, sendText } from "../utils/http.js";
 import { BookDoc } from "../models/Book.js";
 
 const FRONT_ORIGIN = process.env.FRONT_ORIGIN || "http://localhost:3001";
-const COOKIE_NAME = process.env.SESSION_COOKIE || "sess";
-const ONE_WEEK = 60 * 60 * 24 * 7;
 
-function requireSession(req: any, res: any, ctx: any) {
+function requireBasicAuth(req: any, res: any, ctx: any, sendWWWAuthenticate: boolean = false) {
 	try {
-		const secret = process.env.SESSION_SECRET;
-		if (!secret) {
-			sendJSON(res, 500, { ok: false, error: "SESSION_SECRET missing" });
+		const authHeader = req.headers["authorization"];
+		if (!authHeader?.startsWith("Basic ")) {
+			if (sendWWWAuthenticate) {
+				res.setHeader("WWW-Authenticate", 'Basic realm="Molecu Library"');
+			}
+			sendJSON(res, 401, { ok: false, error: "Basic authentication required" });
 			return undefined;
 		}
 
-		const token = parseCookies(req)[COOKIE_NAME];
-		if (!token) {
-			sendJSON(res, 401, { ok: false, error: "No session" });
+		const credentials = authHeader.slice(6); // Remove 'Basic '
+		const decoded = Buffer.from(credentials, "base64").toString("utf-8");
+		const [username, password] = decoded.split(":");
+
+		if (!username || !password) {
+			if (sendWWWAuthenticate) {
+				res.setHeader("WWW-Authenticate", 'Basic realm="Molecu Library"');
+			}
+			sendJSON(res, 401, { ok: false, error: "Invalid credentials format" });
 			return undefined;
 		}
 
-		const payload = verifySession(token, secret);
-		if (!payload) {
-			sendJSON(res, 401, { ok: false, error: "Invalid/expired session" });
-			return undefined;
+		// Verificar credenciales
+		if (username === process.env.BASIC_USER && password === process.env.BASIC_PASS) {
+			return { sub: username };
 		}
 
-		return payload;
+		if (sendWWWAuthenticate) {
+			res.setHeader("WWW-Authenticate", 'Basic realm="Molecu Library"');
+		}
+		sendJSON(res, 401, { ok: false, error: "Invalid credentials" });
+		return undefined;
 	} catch (e) {
 		ctx.broker.logger.error(e);
+		if (sendWWWAuthenticate) {
+			res.setHeader("WWW-Authenticate", 'Basic realm="Molecu Library"');
+		}
 		sendJSON(res, 500, { ok: false, error: "Internal error" });
 		return undefined;
-	}
-}
-
-function hasAction(ctx: any, name: string) {
-	try {
-		return !!ctx?.broker?.registry?.hasAction?.(name, true);
-	} catch {
-		return false;
 	}
 }
 
@@ -61,7 +64,7 @@ const ApiService: ServiceSchema = {
 		cors: {
 			origin: [FRONT_ORIGIN],
 			methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-			allowedHeaders: ["Content-Type"],
+			allowedHeaders: ["Content-Type", "Authorization"],
 			credentials: true,
 			maxAge: 86400,
 		},
@@ -72,7 +75,7 @@ const ApiService: ServiceSchema = {
 				cors: {
 					origin: [FRONT_ORIGIN],
 					methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-					allowedHeaders: ["Content-Type"],
+					allowedHeaders: ["Content-Type", "Authorization"],
 					credentials: true,
 					maxAge: 86400,
 				},
@@ -99,23 +102,14 @@ const ApiService: ServiceSchema = {
 							return sendJSON(res, 500, { ok: false, error: "Internal error" });
 						}
 					},
+
 					// ============ AUTH ============
 					// POST /api/auth/login
 					"POST auth/login"(req: any, res: any, ctx: any) {
 						try {
 							const { username, password } = req.body || {};
 							if (username === process.env.BASIC_USER && password === process.env.BASIC_PASS) {
-								const token = signSession(username, process.env.SESSION_SECRET!, ONE_WEEK);
-								const attrs = [
-									`${COOKIE_NAME}=${encodeURIComponent(token)}`,
-									"Path=/",
-									"HttpOnly",
-									"SameSite=Lax",
-									`Max-Age=${ONE_WEEK}`,
-								];
-								if (process.env.NODE_ENV === "production") attrs.push("Secure");
-								res.setHeader("Set-Cookie", attrs.join("; "));
-								return sendJSON(res, 200, { ok: true, user: { username } }); // ← CIERRA RESPUESTA
+								return sendJSON(res, 200, { ok: true, user: { username } });
 							}
 							return sendJSON(res, 401, { ok: false, error: "Invalid credentials" });
 						} catch (err) {
@@ -124,13 +118,12 @@ const ApiService: ServiceSchema = {
 						}
 					},
 
+					// GET /api/auth/me
 					"GET auth/me"(req: any, res: any, ctx: any) {
 						try {
-							const cookies = parseCookies(req);
-							const token = cookies[COOKIE_NAME];
-							if (!token) return sendJSON(res, 401, { ok: false, error: "No session" });
-							const payload = verifySession(token, process.env.SESSION_SECRET!);
-							if (!payload) return sendJSON(res, 401, { ok: false, error: "Invalid/expired session" });
+							const payload = requireBasicAuth(req, res, ctx, true);
+							if (!payload) return;
+
 							return sendJSON(res, 200, { ok: true, user: { username: payload.sub } });
 						} catch (err) {
 							ctx.broker.logger.error(err);
@@ -141,19 +134,6 @@ const ApiService: ServiceSchema = {
 					// POST /api/auth/logout
 					"POST auth/logout"(req: any, res: any, ctx: any) {
 						try {
-							// Limpiar la cookie de sesión estableciendo una cookie vacía que expire inmediatamente
-							const attrs = [
-								`${COOKIE_NAME}=`,
-								"Path=/",
-								"HttpOnly",
-								"SameSite=Lax",
-								"Max-Age=0",
-								"Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-							];
-							if (process.env.NODE_ENV === "production") attrs.push("Secure");
-
-							res.setHeader("Set-Cookie", attrs.join("; "));
-							ctx.broker.logger.info("User logged out successfully");
 							return sendJSON(res, 200, { ok: true, message: "Logged out successfully" });
 						} catch (err) {
 							ctx.broker.logger.error("Logout error:", err);
@@ -165,19 +145,15 @@ const ApiService: ServiceSchema = {
 					// GET /api/books/search?q=
 					"GET books/search": async function (req: any, res: any) {
 						try {
-							const $ctx = req.$ctx; // contexto de Moleculer para este request
-							const payload = requireSession(req, res, $ctx);
+							const $ctx = req.$ctx;
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const q = String(req.$params?.q ?? "").trim();
 
 							let itemsIn: any[] = [];
 							try {
-								const r: any = await $ctx.broker.call(
-									"openLibrary.search",
-									{ q },
-									{ meta: $ctx?.meta } // propaga meta si lo necesitás
-								);
+								const r: any = await $ctx.broker.call("openLibrary.search", { q }, { meta: $ctx?.meta });
 								itemsIn = Array.isArray(r?.items) ? r.items : [];
 							} catch {
 								itemsIn = [];
@@ -218,7 +194,7 @@ const ApiService: ServiceSchema = {
 					"GET books/last-search": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
-							const payload = requireSession(req, res, $ctx);
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const searches = await $ctx.broker.call("search.last5", { userKey: payload.sub }, { meta: $ctx?.meta });
@@ -234,7 +210,7 @@ const ApiService: ServiceSchema = {
 					"GET books/by-key/:ol_key": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
-							const payload = requireSession(req, res, $ctx);
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const ol_key = decodeURIComponent(req.$params.ol_key);
@@ -275,7 +251,7 @@ const ApiService: ServiceSchema = {
 					"GET books/my-library": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
-							const payload = requireSession(req, res, $ctx);
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const { q, sort, withReview, page, limit } = req.$params;
@@ -309,7 +285,7 @@ const ApiService: ServiceSchema = {
 					"GET books/my-library/:id": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
-							const payload = requireSession(req, res, $ctx);
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const id = req.$params.id;
@@ -328,7 +304,7 @@ const ApiService: ServiceSchema = {
 					"POST books/my-library": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
-							const payload = requireSession(req, res, $ctx);
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const { ol_key, title, author, year, review, rating, coverId, coverUrl } = req.body;
@@ -363,7 +339,7 @@ const ApiService: ServiceSchema = {
 					"PUT books/my-library/:id": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
-							const payload = requireSession(req, res, $ctx);
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const id = req.$params.id;
@@ -393,7 +369,7 @@ const ApiService: ServiceSchema = {
 					"DELETE books/my-library/:id": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
-							const payload = requireSession(req, res, $ctx);
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const id = req.$params.id;
@@ -414,7 +390,7 @@ const ApiService: ServiceSchema = {
 					"GET books/debug": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
-							const payload = requireSession(req, res, $ctx);
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const books = await $ctx.broker.call("library.list", { limit: 10 }, { meta: $ctx?.meta });
@@ -439,8 +415,7 @@ const ApiService: ServiceSchema = {
 					"GET books/library/front-cover/:id": async function (req: any, res: any) {
 						try {
 							const $ctx = req.$ctx;
-							// Si necesitás público para <img> en otro dominio, quitá esta línea.
-							const payload = requireSession(req, res, $ctx);
+							const payload = requireBasicAuth(req, res, $ctx);
 							if (!payload) return;
 
 							const { id } = req.$params;
@@ -455,14 +430,13 @@ const ApiService: ServiceSchema = {
 							const { mime, buffer } = (() => {
 								if (typeof raw !== "string") throw new Error("Invalid cover payload");
 								if (raw.startsWith("data:")) {
-									// data:[mime][;charset=...][;base64],<data>
-									const m = raw.match(/^data:([^;,]+)(?:;charset=[^;,]+)?(?:;base64)?,(.*)$/s);
+									const m = RegExp(/^data:([^;,]+)(?:;charset=[^;,]+)?(?:;base64)?,(.*)$/s).exec(raw);
 									if (!m) throw new Error("Bad data URL");
 									const mime = m[1] || "application/octet-stream";
 									const data = m[2]; // ya viene en base64 cuando trae ;base64
 									return { mime, buffer: Buffer.from(data.replace(/\s/g, ""), "base64") };
 								}
-								// base64 “pelado”
+								// base64 puro
 								return { mime: "image/jpeg", buffer: Buffer.from(raw.replace(/\s/g, ""), "base64") };
 							})();
 

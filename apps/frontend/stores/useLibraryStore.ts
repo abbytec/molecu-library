@@ -1,6 +1,7 @@
 import { useNotificationStore } from "./useNotificationStore";
 import type { BookWithId as LibraryBook, LibraryFilters, LibraryApiResponse } from "shared";
-import { DEFAULT_LIBRARY_FILTERS, validateBook } from "shared";
+import { DEFAULT_LIBRARY_FILTERS } from "shared";
+import { useAuthStore } from "./useAuthStore";
 
 interface LibraryState {
 	books: LibraryBook[];
@@ -87,9 +88,10 @@ export const useLibraryStore = defineStore("library", {
 
 			try {
 				const url = this.buildLibraryUrl(apiBase);
+				const authStore = useAuthStore();
 
 				const response = await $fetch<LibraryApiResponse>(`${apiBase}${url}`, {
-					credentials: "include",
+					headers: authStore.authHeaders,
 					timeout: 10000,
 				});
 
@@ -137,10 +139,11 @@ export const useLibraryStore = defineStore("library", {
 			}
 
 			try {
+				const authStore = useAuthStore();
 				const response = await $fetch<{ ok: boolean; book: LibraryBook }>(`${apiBase}/books/my-library/${bookId}`, {
 					method: "PUT",
 					body: data,
-					credentials: "include",
+					headers: authStore.authHeaders,
 					timeout: 10000,
 				});
 
@@ -177,9 +180,10 @@ export const useLibraryStore = defineStore("library", {
 			}
 
 			try {
+				const authStore = useAuthStore();
 				await $fetch(`${apiBase}/books/my-library/${bookId}`, {
 					method: "DELETE",
-					credentials: "include",
+					headers: authStore.authHeaders,
 					timeout: 10000,
 				});
 
